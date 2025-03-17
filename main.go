@@ -6,6 +6,7 @@ import (
 
 	"go-postgres-api/internal/config"
 	"go-postgres-api/internal/database"
+	"go-postgres-api/internal/middleware"
 	"go-postgres-api/internal/models"
 	"go-postgres-api/internal/routes"
 
@@ -54,6 +55,9 @@ func main() {
 
 	// Initialize Gin router
 	router := gin.Default()
+
+	// Add CORS middleware
+	router.Use(middleware.CORSMiddleware())
 
 	// Set up routes
 	routes.SetupRoutes(router, cfg)
