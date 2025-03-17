@@ -22,6 +22,13 @@ func Connect() (*gorm.DB, error) {
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
 
+	// Check if required environment variables are set
+	if dbHost == "" || dbUser == "" || dbName == "" || dbPort == "" {
+		log.Println("[error] Database connection parameters are missing")
+		log.Printf("DB_HOST=%s, DB_USER=%s, DB_NAME=%s, DB_PORT=%s", dbHost, dbUser, dbName, dbPort)
+		return nil, fmt.Errorf("database connection parameters are missing")
+	}
+
 	// Construct the DSN (Data Source Name)
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
 		dbHost, dbUser, dbPassword, dbName, dbPort)
