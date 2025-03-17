@@ -6,6 +6,7 @@ import (
 
 	"go-postgres-api/internal/config"
 	"go-postgres-api/internal/database"
+	"go-postgres-api/internal/models"
 	"go-postgres-api/internal/routes"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,17 @@ func main() {
 	db, err := database.Connect()
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Auto migrate models
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Role{},
+		&models.AuthLog{},
+		&models.TokenBlacklist{},
+	)
+	if err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	// Get the underlying SQL DB to set up connection pool parameters
