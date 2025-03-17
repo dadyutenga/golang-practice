@@ -4,8 +4,9 @@ import (
 	"log"
 	"os"
 
-	"go-backend/internal/config"
-	"go-backend/internal/routes"
+	"go-postgres-api/internal/config"
+	"go-postgres-api/internal/database"
+	"go-postgres-api/internal/routes"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -22,6 +23,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	// Connect to database
+	db, err := database.Connect()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Get the underlying SQL DB to set up connection pool parameters
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatalf("Failed to get SQL DB: %v", err)
+	}
+
+	// Set connection pool parameters
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
 
 	// Initialize Gin router
 	router := gin.Default()
