@@ -9,3 +9,110 @@ All endpoints are relative to: `http://localhost:8080`
 ## Authentication
 
 Most endpoints require authentication using JWT tokens. To authenticate, include the token in the Authorization header:
+## API Endpoints
+
+### Health Check
+
+#### GET /api/v1/health
+Check if the API is running.
+
+**Response:**
+```json
+{
+  "status": "ok"
+}
+
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "first_name": "John",
+  "last_name": "Doe"
+}{
+  "id": 1,
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z",
+  "is_active": true,
+  "last_login": null,
+  "roles": []
+}{
+  "email": "user@example.com",
+  "password": "password123"
+}{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 86400,
+  "user": {
+    "id": 1,
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-01T00:00:00Z",
+    "is_active": true,
+    "last_login": "2023-01-01T00:00:00Z",
+    "roles": [
+      {
+        "id": 1,
+        "role_type": "user",
+        "created_at": "2023-01-01T00:00:00Z"
+      }
+    ]
+  }
+}[
+  {
+    "id": 1,
+    "email": "user@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "created_at": "2023-01-01T00:00:00Z",
+    "updated_at": "2023-01-01T00:00:00Z",
+    "is_active": true,
+    "last_login": "2023-01-01T00:00:00Z",
+    "roles": [
+      {
+        "id": 1,
+        "role_type": "user",
+        "created_at": "2023-01-01T00:00:00Z"
+      }
+    ]
+  }
+]{
+  "id": 1,
+  "email": "user@example.com",
+  "first_name": "John",
+  "last_name": "Doe",
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z",
+  "is_active": true,
+  "last_login": "2023-01-01T00:00:00Z",
+  "roles": [
+    {
+      "id": 1,
+      "role_type": "user",
+      "created_at": "2023-01-01T00:00:00Z"
+    }
+  ]
+}{
+  "first_name": "Updated",
+  "last_name": "Name",
+  "is_active": true
+}{
+  "id": 1,
+  "email": "user@example.com",
+  "first_name": "Updated",
+  "last_name": "Name",
+  "created_at": "2023-01-01T00:00:00Z",
+  "updated_at": "2023-01-01T00:00:00Z",
+  "is_active": true,
+  "last_login": "2023-01-01T00:00:00Z",
+  "roles": [
+    {
+      "id": 1,
+      "role_type": "user",
+      "created_at": "2023-01-01T00:00:00Z"
+    }
+  ]
+}
+This documentation provides a comprehensive overview of all the API endpoints in your application, including authentication endpoints, user management, and error handling. It will be helpful for anyone integrating with your API.
