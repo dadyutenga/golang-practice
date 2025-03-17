@@ -1,0 +1,11 @@
+# Go PostgreSQL API Documentation
+
+This document provides details about the available API endpoints in the Go PostgreSQL API application.
+
+## Base URL
+
+All endpoints are relative to: `http://localhost:8080`
+
+## Authentication
+
+Most endpoints require authentication using JWT tokens. To authenticate, include the token in the Authorization header:
