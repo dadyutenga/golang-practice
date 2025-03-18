@@ -15,9 +15,10 @@ import (
 )
 
 func main() {
-	// Load environment variables with explicit path
-	if err := godotenv.Load("d:\\Projects\\go-postgres-api\\.env"); err != nil {
+	// Load environment variables with a relative path
+	if err := godotenv.Load(".env"); err != nil {
 		log.Printf("Error loading .env file: %v", err)
+		log.Println("Continuing with environment variables from the system...")
 	}
 
 	// Initialize configuration
