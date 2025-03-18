@@ -74,11 +74,8 @@ func main() {
 	// Set up routes
 	routes.SetupRoutes(router, cfg)
 
-	// Start the server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Server running on http://localhost:%s", port)
-	log.Fatal(router.Run(":" + port))
+	// Start the server with specific IP and port
+	serverAddress := "31.220.82.177:9000"
+	log.Printf("Server running on http://%s", serverAddress)
+	log.Fatal(router.Run(serverAddress))
 }
