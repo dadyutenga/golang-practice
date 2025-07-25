@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 // User represents a user in the system
@@ -17,15 +16,15 @@ type User struct {
 	IsActive   bool      `json:"is_active" gorm:"default:true"`
 	RoleID     uint      `json:"role_id" gorm:"not null;default:2"`
 	Role       Role      `json:"role" gorm:"foreignKey:RoleID"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	CreatedAt  time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt  time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 // Role represents a user role
 type Role struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	RoleType  string    `json:"role_type" gorm:"not null"`
-	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 	UserID    uint      `json:"-" gorm:"index"`
 }
 
@@ -38,7 +37,7 @@ type AuthLog struct {
 	UserAgent    string    `json:"user_agent"`
 	Success      bool      `json:"success" gorm:"not null"`
 	ErrorMessage string    `json:"error_message"`
-	CreatedAt    time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	CreatedAt    time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // TokenBlacklist represents a blacklisted JWT token
@@ -47,7 +46,7 @@ type TokenBlacklist struct {
 	TokenJTI  string    `json:"token_jti" gorm:"uniqueIndex;not null"`
 	UserID    uint      `json:"user_id"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
-	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // EmailVerificationToken represents an email verification token
@@ -57,7 +56,7 @@ type EmailVerificationToken struct {
 	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
 	Used      bool      `json:"used" gorm:"default:false"`
-	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // RefreshToken represents a refresh token
@@ -67,7 +66,7 @@ type RefreshToken struct {
 	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
 	Used      bool      `json:"used" gorm:"default:false"`
-	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // SetPassword hashes and sets the user's password
@@ -84,17 +83,4 @@ func (u *User) SetPassword(password string) error {
 func (u *User) CheckPassword(password string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
 	return err == nil
-}
-
-// BeforeCreate is a GORM hook that runs before creating a user
-func (u *User) BeforeCreate(tx *gorm.DB) error {
-	u.CreatedAt = time.Now()
-	u.UpdatedAt = time.Now()
-	return nil
-}
-
-// BeforeUpdate is a GORM hook that runs before updating a user
-func (u *User) BeforeUpdate(tx *gorm.DB) error {
-	u.UpdatedAt = time.Now()
-	return nil
 }
