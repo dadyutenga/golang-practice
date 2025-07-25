@@ -26,8 +26,9 @@ func SetupRoutes(router *gin.Engine, cfg *config.Config) {
 		{
 			authRoutes.POST("/register", authController.Register)
 			authRoutes.POST("/login", authController.Login)
-			authRoutes.GET("/oauth/login", authController.OAuthLogin)
-			authRoutes.GET("/oauth/callback", authController.OAuthCallback)
+			authRoutes.GET("/verify-email", authController.VerifyEmail)
+			authRoutes.POST("/resend-verification", authController.ResendVerificationEmail)
+			authRoutes.POST("/refresh-token", authController.RefreshToken)
 
 			// Protected routes
 			protected := authRoutes.Group("/")

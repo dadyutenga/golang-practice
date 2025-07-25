@@ -1,36 +1,24 @@
 package controllers
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"go-postgres-api/internal/authenticator"
 	"go-postgres-api/internal/config"
 	"go-postgres-api/internal/models"
 	"go-postgres-api/internal/services"
 	"net/http"
 	"strings"
 
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
 // AuthController handles authentication requests
 type AuthController struct {
-	authService   *services.AuthService
-	authenticator *authenticator.Authenticator
+	authService *services.AuthService
 }
 
 // NewAuthController creates a new authentication controller
 func NewAuthController(cfg *config.Config) *AuthController {
-	auth, err := authenticator.New(cfg)
-	if err != nil {
-		panic("Failed to initialize authenticator: " + err.Error())
-	}
-
 	return &AuthController{
-		authService:   services.NewAuthService(),
-		authenticator: auth,
+		authService: services.NewAuthService(),
 	}
 }
 
@@ -42,13 +30,13 @@ func (c *AuthController) Register(ctx *gin.Context) {
 		return
 	}
 
-	user, err := c.authService.Register(&req)
+	response, err := c.authService.Register(&req)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, user)
+	ctx.JSON(http.StatusCreated, response)
 }
 
 // Login handles user login
@@ -125,84 +113,53 @@ func (c *AuthController) GetProfile(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, user)
 }
 
-// OAuthLogin initiates OAuth login flow
-func (c *AuthController) OAuthLogin(ctx *gin.Context) {
-	state, err := generateRandomState()
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to generate state"})
+// VerifyEmail handles email verification
+func (c *AuthController) VerifyEmail(ctx *gin.Context) {
+	token := ctx.Query("token")
+	if token == "" {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "verification token is required"})
 		return
 	}
 
-	// Store state in session for verification
-	session := sessions.Default(ctx)
-	session.Set("state", state)
-	session.Save()
+	response, err := c.authService.VerifyEmail(token)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
+	}
 
-	// Redirect to OAuth provider
-	url := c.authenticator.AuthCodeURL(state)
-	ctx.Redirect(http.StatusTemporaryRedirect, url)
+	ctx.JSON(http.StatusOK, response)
 }
 
-// OAuthCallback handles OAuth callback
-func (c *AuthController) OAuthCallback(ctx *gin.Context) {
-	session := sessions.Default(ctx)
-
-	// Verify state parameter
-	if ctx.Query("state") != session.Get("state") {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid state parameter"})
+// ResendVerificationEmail handles resending verification email
+func (c *AuthController) ResendVerificationEmail(ctx *gin.Context) {
+	var req models.ResendVerificationRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Clear state from session
-	session.Delete("state")
-	session.Save()
-
-	// Exchange code for token
-	token, err := c.authenticator.Exchange(context.Background(), ctx.Query("code"))
+	response, err := c.authService.ResendVerificationEmail(req.Email)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "failed to exchange token"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	// Verify ID token
-	idToken, err := c.authenticator.VerifyIDToken(context.Background(), token)
-	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "failed to verify ID token"})
-		return
-	}
-
-	// Extract user information
-	var profile map[string]interface{}
-	if err := idToken.Claims(&profile); err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to get user profile"})
-		return
-	}
-
-	// Process OAuth user (create or login)
-	user, jwtToken, err := c.authService.ProcessOAuthUser(profile, ctx.ClientIP(), ctx.GetHeader("User-Agent"))
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	// Store profile in session for the middleware
-	session.Set("profile", profile)
-	session.Save()
-
-	// Return user info and JWT token
-	ctx.JSON(http.StatusOK, gin.H{
-		"user":         user,
-		"access_token": jwtToken,
-		"profile":      profile,
-	})
+	ctx.JSON(http.StatusOK, response)
 }
 
-// generateRandomState generates a random state for OAuth
-func generateRandomState() (string, error) {
-	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		return "", err
+// RefreshToken handles token refresh
+func (c *AuthController) RefreshToken(ctx *gin.Context) {
+	var req models.RefreshTokenRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		return
 	}
-	return base64.StdEncoding.EncodeToString(b), nil
+
+	response, err := c.authService.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response)
 }

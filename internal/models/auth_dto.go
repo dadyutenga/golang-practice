@@ -16,12 +16,33 @@ type LoginRequest struct {
 
 // AuthResponse represents the response for successful authentication
 type AuthResponse struct {
-	Token     string `json:"token"`
-	ExpiresIn int64  `json:"expires_in"`
-	User      User   `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int64  `json:"expires_in"`
+	User         User   `json:"user"`
+}
+
+// RefreshTokenRequest represents the request body for token refresh
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// EmailVerificationRequest represents the request for email verification
+type EmailVerificationRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// ResendVerificationRequest represents the request to resend verification email
+type ResendVerificationRequest struct {
+	Email string `json:"email" binding:"required,email"`
 }
 
 // ErrorResponse represents an error response
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+// SuccessResponse represents a success response
+type SuccessResponse struct {
+	Message string `json:"message"`
 }

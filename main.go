@@ -45,6 +45,8 @@ func main() {
 			&models.Role{},
 			&models.AuthLog{},
 			&models.TokenBlacklist{},
+			&models.EmailVerificationToken{},
+			&models.RefreshToken{},
 		)
 		if err != nil {
 			log.Fatalf("Failed to migrate database: %v", err)

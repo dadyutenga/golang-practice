@@ -107,3 +107,74 @@ func (r *UserRepository) IsTokenBlacklisted(tokenJTI string) (bool, error) {
 		Count(&count)
 	return count > 0, result.Error
 }
+
+// CreateEmailVerificationToken creates an email verification token
+func (r *UserRepository) CreateEmailVerificationToken(token *models.EmailVerificationToken) error {
+	return r.db.Create(token).Error
+}
+
+// FindEmailVerificationToken finds an email verification token
+func (r *UserRepository) FindEmailVerificationToken(token string) (*models.EmailVerificationToken, error) {
+	var verificationToken models.EmailVerificationToken
+	result := r.db.Where("token = ?", token).First(&verificationToken)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, errors.New("token not found")
+		}
+		return nil, result.Error
+	}
+	return &verificationToken, nil
+}
+
+// UpdateUserVerification updates user verification status
+func (r *UserRepository) UpdateUserVerification(userID uint, isVerified bool) error {
+	return r.db.Model(&models.User{}).Where("id = ?", userID).Update("is_verified", isVerified).Error
+}
+
+// MarkEmailTokenAsUsed marks an email verification token as used
+func (r *UserRepository) MarkEmailTokenAsUsed(tokenID uint) error {
+	return r.db.Model(&models.EmailVerificationToken{}).Where("id = ?", tokenID).Update("used", true).Error
+}
+
+// CreateRefreshToken creates a refresh token
+func (r *UserRepository) CreateRefreshToken(token *models.RefreshToken) error {
+	return r.db.Create(token).Error
+}
+
+// FindRefreshToken finds a refresh token
+func (r *UserRepository) FindRefreshToken(token string) (*models.RefreshToken, error) {
+	var refreshToken models.RefreshToken
+	result := r.db.Where("token = ? AND used = false", token).First(&refreshToken)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, errors.New("invalid or expired refresh token")
+		}
+		return nil, result.Error
+	}
+	return &refreshToken, nil
+}
+
+// MarkRefreshTokenAsUsed marks a refresh token as used
+func (r *UserRepository) MarkRefreshTokenAsUsed(tokenID uint) error {
+	return r.db.Model(&models.RefreshToken{}).Where("id = ?", tokenID).Update("used", true).Error
+}
+
+// CleanupExpiredTokens removes expired tokens from the database
+func (r *UserRepository) CleanupExpiredTokens() error {
+	// Clean up expired email verification tokens
+	if err := r.db.Where("expires_at < ?", time.Now()).Delete(&models.EmailVerificationToken{}).Error; err != nil {
+		return err
+	}
+
+	// Clean up expired refresh tokens
+	if err := r.db.Where("expires_at < ?", time.Now()).Delete(&models.RefreshToken{}).Error; err != nil {
+		return err
+	}
+
+	// Clean up expired blacklisted tokens
+	if err := r.db.Where("expires_at < ?", time.Now()).Delete(&models.TokenBlacklist{}).Error; err != nil {
+		return err
+	}
+
+	return nil
+}

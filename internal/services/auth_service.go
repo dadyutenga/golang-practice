@@ -1,10 +1,13 @@
 package services
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"go-postgres-api/internal/models"
 	"go-postgres-api/internal/repositories"
 	"go-postgres-api/pkg/utilis"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -12,24 +15,29 @@ import (
 
 // JWT configuration
 const (
-	jwtSecret     = "your-secret-key" // In production, use environment variables
-	jwtExpiryTime = 24 * time.Hour    // Token valid for 24 hours
+	accessTokenExpiryTime   = 15 * time.Minute   // Access token valid for 15 minutes
+	refreshTokenExpiryTime  = 7 * 24 * time.Hour // Refresh token valid for 7 days
+	verificationTokenExpiry = 24 * time.Hour     // Email verification token valid for 24 hours
 )
 
 // AuthService handles authentication logic
 type AuthService struct {
-	userRepo *repositories.UserRepository
+	userRepo     *repositories.UserRepository
+	emailService *EmailService
 }
 
-// NewAuthService creates a new authentication service
-func NewAuthService() *AuthService {
-	return &AuthService{
-		userRepo: repositories.NewUserRepository(),
+
+// getJWTSecret returns the JWT secret from environment variables
+func (s *AuthService) getJWTSecret() string {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "your-fallback-secret-key" // For development only
 	}
+	return secret
 }
 
-// Register registers a new user
-func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error) {
+// Register registers a new user and sends verification email
+func (s *AuthService) Register(req *models.RegisterRequest) (*models.SuccessResponse, error) {
 	// Check if user already exists
 	existingUser, err := s.userRepo.FindByEmail(req.Email)
 	if err != nil {
@@ -39,11 +47,13 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error
 		return nil, errors.New("user with this email already exists")
 	}
 
-	// Create new user
+	// Create new user with is_verified = false
 	user := &models.User{
-		Email:    req.Email,
-		Name:     req.FirstName + " " + req.LastName,
-		IsActive: true,
+		Email:      req.Email,
+		Name:       req.FirstName + " " + req.LastName,
+		IsVerified: false,
+		IsActive:   true,
+		RoleID:     2, // Default role
 	}
 
 	// Set password
@@ -56,15 +66,108 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error
 		return nil, err
 	}
 
-	// Add default role
-	if err := s.userRepo.AddRole(user.ID, "user"); err != nil {
+	// Generate email verification token
+	verificationToken, err := s.generateEmailVerificationToken(user.ID)
+	if err != nil {
 		return nil, err
 	}
 
-	return user, nil
+	// Send verification email
+	if err := s.emailService.SendVerificationEmail(user.Email, verificationToken); err != nil {
+		// Log error but don't fail registration
+		// In production, you might want to use a job queue for email sending
+		// log.Printf("Failed to send verification email: %v", err)
+	}
+
+	return &models.SuccessResponse{
+		Message: "User registered successfully. Please check your email to verify your account.",
+	}, nil
 }
 
-// Login authenticates a user and returns a JWT token
+// generateEmailVerificationToken generates a secure email verification token
+func (s *AuthService) generateEmailVerificationToken(userID uint) (string, error) {
+	// Generate secure random token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	// Store token in database
+	verificationToken := &models.EmailVerificationToken{
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: time.Now().Add(verificationTokenExpiry),
+		Used:      false,
+	}
+
+	if err := s.userRepo.CreateEmailVerificationToken(verificationToken); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+// VerifyEmail verifies a user's email using the verification token
+func (s *AuthService) VerifyEmail(token string) (*models.SuccessResponse, error) {
+	// Find and validate token
+	verificationToken, err := s.userRepo.FindEmailVerificationToken(token)
+	if err != nil {
+		return nil, errors.New("invalid or expired verification token")
+	}
+
+	if verificationToken.Used {
+		return nil, errors.New("verification token already used")
+	}
+
+	if time.Now().After(verificationToken.ExpiresAt) {
+		return nil, errors.New("verification token expired")
+	}
+
+	// Update user verification status
+	if err := s.userRepo.UpdateUserVerification(verificationToken.UserID, true); err != nil {
+		return nil, err
+	}
+
+	// Mark token as used
+	if err := s.userRepo.MarkEmailTokenAsUsed(verificationToken.ID); err != nil {
+		return nil, err
+	}
+
+	return &models.SuccessResponse{
+		Message: "Email verified successfully. You can now log in.",
+	}, nil
+}
+
+// ResendVerificationEmail resends verification email
+func (s *AuthService) ResendVerificationEmail(email string) (*models.SuccessResponse, error) {
+	// Find user
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if user.IsVerified {
+		return nil, errors.New("email already verified")
+	}
+
+	// Generate new verification token
+	verificationToken, err := s.generateEmailVerificationToken(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send verification email
+	if err := s.emailService.SendVerificationEmail(user.Email, verificationToken); err != nil {
+		return nil, err
+	}
+
+	return &models.SuccessResponse{
+		Message: "Verification email sent successfully.",
+	}, nil
+}
+
+// Login authenticates a user and returns JWT tokens
 func (s *AuthService) Login(req *models.LoginRequest, ipAddress, userAgent string) (*models.AuthResponse, error) {
 	// Find user by email
 	user, err := s.userRepo.FindByEmail(req.Email)
@@ -89,11 +192,11 @@ func (s *AuthService) Login(req *models.LoginRequest, ipAddress, userAgent strin
 
 	authLog.UserID = user.ID
 
-	// Check if user is active
-	if !user.IsActive {
-		authLog.ErrorMessage = "user account is inactive"
+	// Check if email is verified
+	if !user.IsVerified {
+		authLog.ErrorMessage = "email not verified"
 		s.userRepo.LogAuth(authLog)
-		return nil, errors.New("account is inactive")
+		return nil, errors.New("please verify your email address before logging in")
 	}
 
 	// Verify password
@@ -103,20 +206,18 @@ func (s *AuthService) Login(req *models.LoginRequest, ipAddress, userAgent strin
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Generate JWT token
-	tokenJTI := utilis.GenerateRandomString(36)
-	expirationTime := time.Now().Add(jwtExpiryTime)
-	claims := jwt.MapClaims{
-		"sub": user.ID,
-		"exp": expirationTime.Unix(),
-		"iat": time.Now().Unix(),
-		"jti": tokenJTI,
+	// Generate access token
+	accessToken, err := s.generateAccessToken(user.ID)
+	if err != nil {
+		authLog.ErrorMessage = "failed to generate access token"
+		s.userRepo.LogAuth(authLog)
+		return nil, err
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(jwtSecret))
+	// Generate refresh token
+	refreshToken, err := s.generateRefreshToken(user.ID)
 	if err != nil {
-		authLog.ErrorMessage = "failed to generate token"
+		authLog.ErrorMessage = "failed to generate refresh token"
 		s.userRepo.LogAuth(authLog)
 		return nil, err
 	}
@@ -129,9 +230,98 @@ func (s *AuthService) Login(req *models.LoginRequest, ipAddress, userAgent strin
 	s.userRepo.LogAuth(authLog)
 
 	return &models.AuthResponse{
-		Token:     tokenString,
-		ExpiresIn: int64(jwtExpiryTime.Seconds()),
-		User:      *user,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    int64(accessTokenExpiryTime.Seconds()),
+		User:         *user,
+	}, nil
+}
+
+// generateAccessToken generates a JWT access token
+func (s *AuthService) generateAccessToken(userID uint) (string, error) {
+	tokenJTI := utilis.GenerateRandomString(36)
+	expirationTime := time.Now().Add(accessTokenExpiryTime)
+	claims := jwt.MapClaims{
+		"sub":  userID,
+		"exp":  expirationTime.Unix(),
+		"iat":  time.Now().Unix(),
+		"jti":  tokenJTI,
+		"type": "access",
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.getJWTSecret()))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+// generateRefreshToken generates a refresh token
+func (s *AuthService) generateRefreshToken(userID uint) (string, error) {
+	// Generate secure random token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	// Store refresh token in database
+	refreshToken := &models.RefreshToken{
+		UserID:    userID,
+		Token:     token,
+		ExpiresAt: time.Now().Add(refreshTokenExpiryTime),
+		Used:      false,
+	}
+
+	if err := s.userRepo.CreateRefreshToken(refreshToken); err != nil {
+		return "", err
+	}
+
+	return token, nil
+}
+
+// RefreshAccessToken generates a new access token using refresh token
+func (s *AuthService) RefreshAccessToken(refreshTokenString string) (*models.AuthResponse, error) {
+	// Find and validate refresh token
+	refreshToken, err := s.userRepo.FindRefreshToken(refreshTokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if time.Now().After(refreshToken.ExpiresAt) {
+		return nil, errors.New("refresh token expired")
+	}
+
+	// Get user
+	user, err := s.userRepo.FindByID(refreshToken.UserID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	// Generate new access token
+	accessToken, err := s.generateAccessToken(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate new refresh token
+	newRefreshToken, err := s.generateRefreshToken(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark old refresh token as used
+	if err := s.userRepo.MarkRefreshTokenAsUsed(refreshToken.ID); err != nil {
+		return nil, err
+	}
+
+	return &models.AuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: newRefreshToken,
+		ExpiresIn:    int64(accessTokenExpiryTime.Seconds()),
+		User:         *user,
 	}, nil
 }
 
@@ -139,57 +329,53 @@ func (s *AuthService) Login(req *models.LoginRequest, ipAddress, userAgent strin
 func (s *AuthService) Logout(tokenString string, userID uint) error {
 	// Parse token to get claims
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(jwtSecret), nil
+		return []byte(s.getJWTSecret()), nil
 	})
 	if err != nil {
 		return err
 	}
 
-	// Get token JTI
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return errors.New("invalid token claims")
+	if !ok || !token.Valid {
+		return errors.New("invalid token")
 	}
 
+	// Get JTI for blacklisting
 	jti, ok := claims["jti"].(string)
 	if !ok {
 		return errors.New("invalid token JTI")
 	}
 
+	// Get expiration time
 	exp, ok := claims["exp"].(float64)
 	if !ok {
 		return errors.New("invalid token expiration")
 	}
 
 	// Add token to blacklist
-	blacklist := &models.TokenBlacklist{
+	blacklistedToken := &models.TokenBlacklist{
 		TokenJTI:  jti,
 		UserID:    userID,
 		ExpiresAt: time.Unix(int64(exp), 0),
 	}
 
-	return s.userRepo.BlacklistToken(blacklist)
+	return s.userRepo.BlacklistToken(blacklistedToken)
 }
 
 // ValidateToken validates a JWT token
 func (s *AuthService) ValidateToken(tokenString string) (uint, error) {
 	// Parse token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(jwtSecret), nil
+		return []byte(s.getJWTSecret()), nil
 	})
 	if err != nil {
 		return 0, err
 	}
 
 	// Validate token
-	if !token.Valid {
-		return 0, errors.New("invalid token")
-	}
-
-	// Get claims
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return 0, errors.New("invalid token claims")
+	if !ok || !token.Valid {
+		return 0, errors.New("invalid token")
 	}
 
 	// Check if token is blacklisted
@@ -218,93 +404,4 @@ func (s *AuthService) ValidateToken(tokenString string) (uint, error) {
 // GetUserByID retrieves a user by ID
 func (s *AuthService) GetUserByID(userID uint) (*models.User, error) {
 	return s.userRepo.FindByID(userID)
-}
-
-// GenerateToken generates a JWT token for a user
-func (s *AuthService) GenerateToken(userID uint) (string, error) {
-	tokenJTI := utilis.GenerateRandomString(36)
-	expirationTime := time.Now().Add(jwtExpiryTime)
-	claims := jwt.MapClaims{
-		"sub": userID,
-		"exp": expirationTime.Unix(),
-		"iat": time.Now().Unix(),
-		"jti": tokenJTI,
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(jwtSecret))
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
-}
-
-// ProcessOAuthUser processes OAuth user login/registration
-func (s *AuthService) ProcessOAuthUser(profile map[string]interface{}, ipAddress, userAgent string) (*models.User, string, error) {
-	email, ok := profile["email"].(string)
-	if !ok || email == "" {
-		return nil, "", errors.New("email not found in OAuth profile")
-	}
-
-	name, _ := profile["name"].(string)
-	if name == "" {
-		name = email // fallback to email if name not available
-	}
-
-	// Check if user exists
-	existingUser, err := s.userRepo.FindByEmail(email)
-	if err == nil && existingUser != nil {
-		// User exists, generate token and return
-		token, err := s.GenerateToken(existingUser.ID)
-		if err != nil {
-			return nil, "", err
-		}
-
-		// Log authentication
-		// Note: You'll need to implement AuthLog repository methods
-		// authLog := models.AuthLog{
-		// 	UserID:    existingUser.ID,
-		// 	IPAddress: ipAddress,
-		// 	UserAgent: userAgent,
-		// 	Action:    "oauth_login",
-		// 	Success:   true,
-		// }
-		// s.authLogRepo.Create(&authLog)
-
-		return existingUser, token, nil
-	}
-
-	// User doesn't exist, create new user
-	oauthID, _ := profile["sub"].(string)
-
-	user := &models.User{
-		Email:    email,
-		Name:     name,
-		OAuthID:  &oauthID,
-		IsActive: true,
-		RoleID:   2, // Default role
-	}
-
-	if err := s.userRepo.Create(user); err != nil {
-		return nil, "", err
-	}
-
-	// Generate JWT token
-	token, err := s.GenerateToken(user.ID)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Log authentication
-	// authLog := models.AuthLog{
-	// 	UserID:    user.ID,
-	// 	IPAddress: ipAddress,
-	// 	UserAgent: userAgent,
-	// 	Action:    "oauth_registration",
-	// 	Success:   true,
-	// }
-	// s.authLogRepo.Create(&authLog)
-
-	return user, token, nil
 }

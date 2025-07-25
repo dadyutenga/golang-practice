@@ -9,16 +9,16 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Email     string    `json:"email" gorm:"unique;not null"`
-	Name      string    `json:"name" gorm:"not null"`
-	Password  *string   `json:"-" gorm:"null"`        // Make password nullable for OAuth users
-	OAuthID   *string   `json:"oauth_id" gorm:"null"` // Add OAuth ID field
-	RoleID    uint      `json:"role_id" gorm:"not null;default:2"`
-	Role      Role      `json:"role" gorm:"foreignKey:RoleID"`
-	IsActive  bool      `json:"is_active" gorm:"default:true"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	Email      string    `json:"email" gorm:"unique;not null"`
+	Name       string    `json:"name" gorm:"not null"`
+	Password   string    `json:"-" gorm:"not null"`
+	IsVerified bool      `json:"is_verified" gorm:"default:false"`
+	IsActive   bool      `json:"is_active" gorm:"default:true"`
+	RoleID     uint      `json:"role_id" gorm:"not null;default:2"`
+	Role       Role      `json:"role" gorm:"foreignKey:RoleID"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Role represents a user role
@@ -50,23 +50,39 @@ type TokenBlacklist struct {
 	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
 }
 
+// EmailVerificationToken represents an email verification token
+type EmailVerificationToken struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"not null"`
+	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
+	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
+	Used      bool      `json:"used" gorm:"default:false"`
+	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+}
+
+// RefreshToken represents a refresh token
+type RefreshToken struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"not null"`
+	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
+	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
+	Used      bool      `json:"used" gorm:"default:false"`
+	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+}
+
 // SetPassword hashes and sets the user's password
 func (u *User) SetPassword(password string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	passwordStr := string(hashedPassword)
-	u.Password = &passwordStr
+	u.Password = string(hashedPassword)
 	return nil
 }
 
 // CheckPassword verifies the user's password
 func (u *User) CheckPassword(password string) bool {
-	if u.Password == nil {
-		return false
-	}
-	err := bcrypt.CompareHashAndPassword([]byte(*u.Password), []byte(password))
+	err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password))
 	return err == nil
 }
 
