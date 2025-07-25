@@ -43,7 +43,7 @@ type AuthLog struct {
 // TokenBlacklist represents a blacklisted JWT token
 type TokenBlacklist struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
-	TokenJTI  string    `json:"token_jti" gorm:"uniqueIndex;not null"`
+	TokenJTI  string    `json:"token_jti" gorm:"type:varchar(255);uniqueIndex;not null"`
 	UserID    uint      `json:"user_id"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -53,7 +53,7 @@ type TokenBlacklist struct {
 type EmailVerificationToken struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	UserID    uint      `json:"user_id" gorm:"not null"`
-	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
+	Token     string    `json:"token" gorm:"type:varchar(255);uniqueIndex;not null"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
 	Used      bool      `json:"used" gorm:"default:false"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
@@ -63,7 +63,7 @@ type EmailVerificationToken struct {
 type RefreshToken struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	UserID    uint      `json:"user_id" gorm:"not null"`
-	Token     string    `json:"token" gorm:"uniqueIndex;not null"`
+	Token     string    `json:"token" gorm:"type:varchar(255);uniqueIndex;not null"`
 	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
 	Used      bool      `json:"used" gorm:"default:false"`
 	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
