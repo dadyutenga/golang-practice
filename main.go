@@ -76,7 +76,11 @@ func main() {
 	routes.SetupRoutes(router, cfg)
 
 	// Start the server
-	serverAddress := ":" + cfg.ServerPort
-	log.Printf("Server running on http://localhost%s", serverAddress)
+	serverHost := cfg.ServerHost
+	if serverHost == "" {
+		serverHost = "0.0.0.0" // Default to all interfaces
+	}
+	serverAddress := serverHost + ":" + cfg.ServerPort
+	log.Printf("Server running on http://%s", serverAddress)
 	log.Fatal(router.Run(serverAddress))
 }

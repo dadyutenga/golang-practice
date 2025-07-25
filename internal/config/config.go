@@ -14,6 +14,7 @@ type Config struct {
 	DBName     string
 
 	// Server Configuration
+	ServerHost string
 	ServerPort string
 
 	// OAuth Configuration
@@ -37,6 +38,7 @@ func LoadConfig() (*Config, error) {
 		DBName:     os.Getenv("DB_NAME"),
 
 		// Server
+		ServerHost: os.Getenv("HOST"),
 		ServerPort: os.Getenv("PORT"),
 
 		// OAuth
