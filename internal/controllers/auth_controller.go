@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"go-postgres-api/internal/authenticator"
+	"go-postgres-api/internal/config"
 	"go-postgres-api/internal/models"
 	"go-postgres-api/internal/services"
 	"net/http"
@@ -21,8 +22,8 @@ type AuthController struct {
 }
 
 // NewAuthController creates a new authentication controller
-func NewAuthController() *AuthController {
-	auth, err := authenticator.New()
+func NewAuthController(cfg *config.Config) *AuthController {
+	auth, err := authenticator.New(cfg)
 	if err != nil {
 		panic("Failed to initialize authenticator: " + err.Error())
 	}

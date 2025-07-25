@@ -13,7 +13,7 @@ import (
 // DB is the database connection
 var DB *gorm.DB
 
-// Connect establishes a connection to the PostgreSQL database
+// Connect establishes a connection to the MySQL database
 func Connect() (*gorm.DB, error) {
 	// Get database connection details from environment variables
 	dbUser := os.Getenv("DB_USER")
@@ -29,9 +29,9 @@ func Connect() (*gorm.DB, error) {
 		return nil, fmt.Errorf("database connection parameters are missing")
 	}
 
-	// Construct the DSN (Data Source Name)
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable TimeZone=UTC",
-		dbHost, dbUser, dbPassword, dbName, dbPort)
+	// Construct the DSN (Data Source Name) for MySQL
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		dbUser, dbPassword, dbHost, dbPort, dbName)
 
 	// Configure GORM logger
 	gormLogger := logger.New(
@@ -44,7 +44,7 @@ func Connect() (*gorm.DB, error) {
 	)
 
 	// Open connection to the database
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		Logger: gormLogger,
 	})
 	if err != nil {
@@ -54,7 +54,7 @@ func Connect() (*gorm.DB, error) {
 	// Set the global DB variable
 	DB = db
 
-	log.Println("Connected to PostgreSQL database")
+	log.Println("Connected to MySQL database")
 	return db, nil
 }
 

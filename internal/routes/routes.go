@@ -21,7 +21,7 @@ func SetupRoutes(router *gin.Engine, cfg *config.Config) {
 		})
 
 		// Auth routes
-		authController := controllers.NewAuthController()
+		authController := controllers.NewAuthController(cfg)
 		authRoutes := v1.Group("/auth")
 		{
 			authRoutes.POST("/register", authController.Register)

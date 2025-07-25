@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"go-postgres-api/internal/config"
 	"go-postgres-api/internal/database"
@@ -74,8 +73,8 @@ func main() {
 	// Set up routes
 	routes.SetupRoutes(router, cfg)
 
-	// Start the server with specific IP and port
-	serverAddress := "31.220.82.177:9000"
-	log.Printf("Server running on http://%s", serverAddress)
+	// Start the server
+	serverAddress := ":" + cfg.ServerPort
+	log.Printf("Server running on http://localhost%s", serverAddress)
 	log.Fatal(router.Run(serverAddress))
 }

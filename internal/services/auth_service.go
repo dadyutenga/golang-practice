@@ -41,10 +41,9 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.User, error
 
 	// Create new user
 	user := &models.User{
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		IsActive:  true,
+		Email:    req.Email,
+		Name:     req.FirstName + " " + req.LastName,
+		IsActive: true,
 	}
 
 	// Set password
@@ -219,4 +218,93 @@ func (s *AuthService) ValidateToken(tokenString string) (uint, error) {
 // GetUserByID retrieves a user by ID
 func (s *AuthService) GetUserByID(userID uint) (*models.User, error) {
 	return s.userRepo.FindByID(userID)
+}
+
+// GenerateToken generates a JWT token for a user
+func (s *AuthService) GenerateToken(userID uint) (string, error) {
+	tokenJTI := utilis.GenerateRandomString(36)
+	expirationTime := time.Now().Add(jwtExpiryTime)
+	claims := jwt.MapClaims{
+		"sub": userID,
+		"exp": expirationTime.Unix(),
+		"iat": time.Now().Unix(),
+		"jti": tokenJTI,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+// ProcessOAuthUser processes OAuth user login/registration
+func (s *AuthService) ProcessOAuthUser(profile map[string]interface{}, ipAddress, userAgent string) (*models.User, string, error) {
+	email, ok := profile["email"].(string)
+	if !ok || email == "" {
+		return nil, "", errors.New("email not found in OAuth profile")
+	}
+
+	name, _ := profile["name"].(string)
+	if name == "" {
+		name = email // fallback to email if name not available
+	}
+
+	// Check if user exists
+	existingUser, err := s.userRepo.FindByEmail(email)
+	if err == nil && existingUser != nil {
+		// User exists, generate token and return
+		token, err := s.GenerateToken(existingUser.ID)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Log authentication
+		// Note: You'll need to implement AuthLog repository methods
+		// authLog := models.AuthLog{
+		// 	UserID:    existingUser.ID,
+		// 	IPAddress: ipAddress,
+		// 	UserAgent: userAgent,
+		// 	Action:    "oauth_login",
+		// 	Success:   true,
+		// }
+		// s.authLogRepo.Create(&authLog)
+
+		return existingUser, token, nil
+	}
+
+	// User doesn't exist, create new user
+	oauthID, _ := profile["sub"].(string)
+
+	user := &models.User{
+		Email:    email,
+		Name:     name,
+		OAuthID:  &oauthID,
+		IsActive: true,
+		RoleID:   2, // Default role
+	}
+
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, "", err
+	}
+
+	// Generate JWT token
+	token, err := s.GenerateToken(user.ID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Log authentication
+	// authLog := models.AuthLog{
+	// 	UserID:    user.ID,
+	// 	IPAddress: ipAddress,
+	// 	UserAgent: userAgent,
+	// 	Action:    "oauth_registration",
+	// 	Success:   true,
+	// }
+	// s.authLogRepo.Create(&authLog)
+
+	return user, token, nil
 }

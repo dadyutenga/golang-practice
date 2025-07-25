@@ -56,13 +56,17 @@ func (u *User) SetPassword(password string) error {
 	if err != nil {
 		return err
 	}
-	u.PasswordHash = string(hashedPassword)
+	passwordStr := string(hashedPassword)
+	u.Password = &passwordStr
 	return nil
 }
 
 // CheckPassword verifies the user's password
 func (u *User) CheckPassword(password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password))
+	if u.Password == nil {
+		return false
+	}
+	err := bcrypt.CompareHashAndPassword([]byte(*u.Password), []byte(password))
 	return err == nil
 }
 
