@@ -26,6 +26,13 @@ type AuthService struct {
 	emailService *EmailService
 }
 
+// NewAuthService creates a new authentication service
+func NewAuthService() *AuthService {
+	return &AuthService{
+		userRepo:     repositories.NewUserRepository(),
+		emailService: NewEmailService(),
+	}
+}
 
 // getJWTSecret returns the JWT secret from environment variables
 func (s *AuthService) getJWTSecret() string {
