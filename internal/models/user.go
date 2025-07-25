@@ -9,16 +9,16 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID           uint      `json:"id" gorm:"primaryKey"`
-	Email        string    `json:"email" gorm:"uniqueIndex;not null"`
-	PasswordHash string    `json:"-" gorm:"not null"` // Never expose password in JSON
-	FirstName    string    `json:"first_name"`
-	LastName     string    `json:"last_name"`
-	CreatedAt    time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
-	UpdatedAt    time.Time `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP"`
-	IsActive     bool      `json:"is_active" gorm:"default:true"`
-	LastLogin    time.Time `json:"last_login"`
-	Roles        []Role    `json:"roles" gorm:"many2many:user_roles;"`
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Email     string    `json:"email" gorm:"unique;not null"`
+	Name      string    `json:"name" gorm:"not null"`
+	Password  *string   `json:"-" gorm:"null"`        // Make password nullable for OAuth users
+	OAuthID   *string   `json:"oauth_id" gorm:"null"` // Add OAuth ID field
+	RoleID    uint      `json:"role_id" gorm:"not null;default:2"`
+	Role      Role      `json:"role" gorm:"foreignKey:RoleID"`
+	IsActive  bool      `json:"is_active" gorm:"default:true"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Role represents a user role

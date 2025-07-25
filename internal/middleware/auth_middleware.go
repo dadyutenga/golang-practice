@@ -4,6 +4,7 @@ import (
 	"go-postgres-api/internal/services"
 	"net/http"
 	"strings"
+	"github.com/gin-contrib/sessions"
 
 	"github.com/gin-gonic/gin"
 )
@@ -42,5 +43,13 @@ func AuthMiddleware() gin.HandlerFunc {
 		// Set user ID in context
 		c.Set("userID", userID)
 		c.Next()
+	}
+}
+
+func IsAuthenticated(ctx *gin.Context) {
+	if sessions.Default(ctx).Get("profile") == nil {
+		ctx.Redirect(http.StatusSeeOther, "/")
+	} else {
+		ctx.Next()
 	}
 }
